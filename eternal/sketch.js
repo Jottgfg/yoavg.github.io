@@ -5,9 +5,21 @@ const SMALL_RADIUS = 25;
 let SHOW_POINTS = false;
 let PAUSED = true;
 let BACKGROUND_COLOR = "antiquewhite";
+let WARP_SPEED = false;
 
 function keyPressed() {
   if (key === 'p') SHOW_POINTS = !SHOW_POINTS;
+  if (key === 'w') WARP_SPEED = !WARP_SPEED;
+}
+
+function mousePressed() {
+  for (const b of [data.whiteBall, data.blackBall]) {
+    if (dista({ x: mouseX, y: mouseY }, b) < SMALL_RADIUS + 10) {
+      const s = len(b.v);
+      const a = random(0, 360);
+      b.v = { x: cos(a) * s, y: sin(a) * s };
+    }
+  }
 }
 
 function mouseMoved() {
@@ -69,6 +81,26 @@ function bounceFromCircle(c, item, itemV) {
   return mult(newDir, len(itemV));
 }
 
+function clampToCircle(item, itemRadius, center, centerRadius) {
+  if (dista(item, center) < centerRadius - itemRadius) { return item; }
+  const a = atan2((item.y - center.y), item.x - center.x);
+  const newLoc = {
+    x: center.x + cos(a) * (centerRadius - itemRadius - 1),
+    y: center.y + sin(a) * (centerRadius - itemRadius - 1),
+  }
+  return { ...item, ...newLoc }
+}
+
+function pushToCircle(item, itemRadius, center, centerRadius) {
+  if (dista(item, center) > centerRadius - itemRadius) { return item; }
+  const a = atan2((item.y - center.y), item.x - center.x);
+  const newLoc = {
+    x: center.x + cos(a) * (centerRadius - itemRadius + 1),
+    y: center.y + sin(a) * (centerRadius - itemRadius + 1),
+  }
+  return { ...item, ...newLoc }
+}
+
 const data = {};
 function setup() {
   const canvas = createCanvas(400, 400);
@@ -87,112 +119,100 @@ function setup() {
   // from top to bottom
   data.whiteOuter = arcOfPoints(CENTER.x, CENTER.y, MAIN_RADIUS, 270, 270 + 180, 60);
   // balls
-  //const vW = createVector(2,3);
-  //const vB = createAVector(2,3);
-  //const vW = createVector(-4,2);
-  //const vB = createVector(4,-2);
-  //const vW = createVector(-4,0);
-  //const vB = createVector(4,-0);
-  const vW = createVector(0, 4);
-  const vB = createVector(0, 4);
+  const vW = createVector(0.1, 4);
+  const vB = createVector(-0.1, 4);
   data.whiteBall = { x: CENTER.x, y: CENTER.y - MED_RADIUS, r: SMALL_RADIUS, v: vW };
   data.blackBall = { x: CENTER.x, y: CENTER.y + MED_RADIUS, r: SMALL_RADIUS, v: vB };
 }
 
-let t = 0;
 function draw() {
+  drawX();
+  if (!WARP_SPEED) return;
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+  drawX();
+}
+
+let t = 0;
+function drawX() {
   t++;
   render();
 
   if (t > 400) PAUSED = false;
   if (PAUSED) return;
   collisions();
-  data.whiteBall = move(data.whiteBall);
-  data.blackBall = move(data.blackBall);
-  // if moved to0 much, move back into the border.
-  if (dista(data.whiteBall, CENTER) > MAIN_RADIUS - SMALL_RADIUS) {
-    const a = atan2((data.whiteBall.y - CENTER.y), data.whiteBall.x - CENTER.x);
-    const newLoc = {
-      x: CENTER.x + cos(a) * (MAIN_RADIUS - SMALL_RADIUS - 1),
-      y: CENTER.y + sin(a) * (MAIN_RADIUS - SMALL_RADIUS - 1),
-    }
-    data.whiteBall = { ...data.whiteBall, ...newLoc };
-  }
-  if (dista(data.blackBall, CENTER) > MAIN_RADIUS - SMALL_RADIUS) {
-    const a = atan2((data.blackBall.y - CENTER.y), data.blackBall.x - CENTER.x);
-    const newLoc = {
-      x: CENTER.x + cos(a) * (MAIN_RADIUS - SMALL_RADIUS - 1),
-      y: CENTER.y + sin(a) * (MAIN_RADIUS - SMALL_RADIUS - 1),
-    }
-    data.blackBall = { ...data.blackBall, ...newLoc };
-  }
+}
+
+function keyedMin(arr, pred) {
+  return arr.reduce((acc, v) => pred(v) < pred(acc) ? v : acc, arr[0]);
 }
 
 function collisions() {
   for (const b of [data.whiteBall, data.blackBall]) {
+    let newPosition = { x: b.x, y: b.y };
+    let newVelocity = b.v;
+
     let movedBall = move(b);
-    let newV = b.v;
-    let hit = false;
+    let originalV = b.v;
     const hitPoints = [];
-    /*
-    const newBorder = [data.border[0]];
-    for (let i = 1; i < data.border.length; i++) {
-      const p1 = data.border[i-1];
-      const p2 = data.border[i];
-      if (dista(p1, CENTER) >= MAIN_RADIUS) {
-        newBorder.push(p1); 
-        continue;
-      }
-      if (dista(p1, movedBall) < SMALL_RADIUS) {
-        let movedPoint = { ...p1, x: p1.x + (newV.x*1.0), y: p1.y + (newV.y*1.0) }
-        newBorder.push(movedPoint);
-        hitPoints.push(p1);
-        hit = true;
-      } else if (distToLineSegment(movedBall, p1, p2) <= SMALL_RADIUS) {
-        let midPoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-        newBorder.push(p1);
-        hitPoints.push(midPoint);
-        hit = true;
-      } else {
-        newBorder.push(p1);
-      }
-    }
-    newBorder.push(data.border[data.border.length-1]);
-    */
 
-    const newBorder = [];
+    let newBorder = [];
     for (const p of data.border) {
-      if (dista(p, movedBall) < SMALL_RADIUS - 4) {
-        let movedPoint = { ...p, x: p.x + (newV.x * 1.5), y: p.y + (newV.y * 1.5) }
-        if (dista(movedPoint, CENTER) >= MAIN_RADIUS) movedPoint = p; // don't move.
-        newBorder.push(movedPoint);
-        hitPoints.push(p);
-        hit = true;
+      const d = dista(p, movedBall);
+      if (d < SMALL_RADIUS - 4) {
+        hitPoints.push({ point: p, distance: d });
+        newBorder.push({ point: p, hit: true, distance: d });
       } else {
-        newBorder.push(p);
+        newBorder.push({ point: p, hit: false });
       }
     }
-
-    if (dista(movedBall, CENTER) >= MAIN_RADIUS - SMALL_RADIUS) {
-      newV = bounceFromCircle(CENTER, movedBall, newV);
-    } else if (hit) {
-      newV = bounceFromCircle(hitPoints[0], movedBall, newV);
+    if (hitPoints.length > 0) {
+      const closestPoint = keyedMin(hitPoints, (hp) => hp.distance).point;
+      newVelocity = bounceFromCircle(closestPoint, movedBall, originalV)
+      console.log("newV", newVelocity, closestPoint, originalV, movedBall)
+      newBorder = newBorder.map(({ point, hit, distance }) => {
+        if (!hit) return point;
+        const movedPoint = pushToCircle(
+          point, //{ ...point, x: point.x + (originalV.x * 1.5), y: point.y + (originalV.y * 1.5) },
+          0,
+          movedBall,
+          SMALL_RADIUS,
+        );
+        if (dista(movedPoint, movedBall) < distance) { // got closer as result of moving?
+          console.log("huh?", distance, dista(movedPoint, movedBall));
+          return point; // don't move it in this case
+        }
+        return clampToCircle(movedPoint, 0, CENTER, MAIN_RADIUS); // clamp it to the border if needed
+      });
+    } else {
+      newBorder = newBorder.map(({ point }) => point)
+    }
+    if (dista(movedBall, CENTER) > MAIN_RADIUS - SMALL_RADIUS) {
+      // bounce from border:
+      // override bounce from hit point if needed:
+      newVelocity = bounceFromCircle(CENTER, movedBall, originalV);
+    }
+    newPosition = { x: b.x + newVelocity.x, y: b.y + newVelocity.y };
+    newPosition = clampToCircle(newPosition, SMALL_RADIUS, CENTER, MAIN_RADIUS);
+    if (b === data.whiteBall) {
+      data.whiteBall = { ...b, ...newPosition, v: newVelocity };
+    } else {
+      data.blackBall = { ...b, ...newPosition, v: newVelocity };
     }
     data.border = refillBorder(newBorder);
-    if (b === data.whiteBall) {
-      data.whiteBall = { ...b, v: newV };
-    } else {
-      data.blackBall = { ...b, v: newV };
-    }
   }
 }
 
+
 function refillBorder(points) {
-  const distances = points.map((p, i) => i > 0 ? dista(p, points[i - 1]) : dista(points[0], points[1]));
-  const maxD = max(distances);
-  const minD = min(distances);
-  //console.log("mm", minD, maxD);
-  if (maxD < 10) return points;
   let found = true;
   while (found) {
     found = false;
@@ -202,10 +222,8 @@ function refillBorder(points) {
       let prevPoint = points[i - 1];
       if (dista(point, prevPoint) > 10) {
         const mid = { x: lerp(point.x, prevPoint.x, 0.5), y: lerp(point.y, prevPoint.y, 0.5) };
-        //console.log("add point", mid, "between", point, prevPoint, dista(point, mid), dista(prevPoint, mid));
         refilledBorder.push(mid);
         found = true;
-        //noLoop();
       }
       refilledBorder.push(point);
     }
